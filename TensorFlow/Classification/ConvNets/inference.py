@@ -4,7 +4,8 @@ import pathlib
 import time
 import tempfile
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import numpy as np
 
 from tensorflow.python.compiler.tensorrt import trt_convert as trt

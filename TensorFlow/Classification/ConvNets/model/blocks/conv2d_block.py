@@ -15,9 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from model import layers
+from utils import hparam
 
 __all__ = ['conv2d_block']
 
@@ -38,10 +39,10 @@ def conv2d_block(
     cardinality=1,
 ):
 
-    if not isinstance(conv2d_hparams, tf.contrib.training.HParams):
+    if not isinstance(conv2d_hparams, hparam.HParams):
         raise ValueError("The paramater `conv2d_hparams` is not of type `HParams`")
 
-    if not isinstance(batch_norm_hparams, tf.contrib.training.HParams) and use_batch_norm:
+    if not isinstance(batch_norm_hparams, hparam.HParams) and use_batch_norm:
         raise ValueError("The paramater `conv2d_hparams` is not of type `HParams`")
 
     with tf.variable_scope(name):

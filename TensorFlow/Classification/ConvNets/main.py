@@ -15,12 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from distutils import dist
 from utils.cmdline_helper import parse_cmdline
 from model.resnet import model_architectures
 from runtime import Runner
 import dllogger
 from utils import hvd_wrapper as hvd
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import os
 
 import warnings
@@ -28,12 +30,17 @@ warnings.simplefilter("ignore")
 
 
 if __name__ == "__main__":
-
+    visible_devices_env = os.environ.get('AMD_VISIBLE_DEVICES', '')
+    if visible_devices_env:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        devices = []
+        for id in visible_devices_env.split(','):
+            devices.append(physical_devices[int(id)])
+        tf.config.experimental.set_visible_devices(devices, 'GPU')
     tf.logging.set_verbosity(tf.logging.ERROR)
-
+    
     FLAGS = parse_cmdline(model_architectures.keys())
-    hvd.init(True)
-
+    hvd.init(FLAGS.distribute_strategy=='horovod')
     if hvd.rank() == 0:
         log_path = os.path.join(FLAGS.results_dir, FLAGS.log_filename)
         os.makedirs(FLAGS.results_dir, exist_ok=True)
@@ -93,7 +100,8 @@ if __name__ == "__main__":
                      symmetric=FLAGS.symmetric,
                      quant_delay=FLAGS.quant_delay,
                      use_qdq=FLAGS.use_qdq,
-                     finetune_checkpoint=FLAGS.finetune_checkpoint)
+                     finetune_checkpoint=FLAGS.finetune_checkpoint,
+                     distribute_strategy=FLAGS.distribute_strategy)
 
     if FLAGS.mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:
 
@@ -112,7 +120,8 @@ if __name__ == "__main__":
                             quantize=FLAGS.quantize,
                             symmetric=FLAGS.symmetric,
                             use_final_conv=FLAGS.use_final_conv,
-                            use_qdq=FLAGS.use_qdq)
+                            use_qdq=FLAGS.use_qdq,
+                            distribute_strategy=FLAGS.distribute_strategy)
         if hvd.size() > 1:
             # Wait for all processes to finish
             from mpi4py import MPI

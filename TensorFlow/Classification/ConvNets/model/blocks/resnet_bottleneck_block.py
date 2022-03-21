@@ -17,10 +17,11 @@
 # ==============================================================================
 
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 import model.layers
-import model.blocks 
+import model.blocks
+from utils import hparam 
 
 __all__ = ['bottleneck_block']
 
@@ -43,10 +44,10 @@ def bottleneck_block(
     if data_format not in ['NHWC', 'NCHW']:
         raise ValueError("Unknown data format: `%s` (accepted: ['NHWC', 'NCHW'])" % data_format)
 
-    if not isinstance(conv2d_hparams, tf.contrib.training.HParams):
+    if not isinstance(conv2d_hparams, hparam.HParams):
         raise ValueError("The paramater `conv2d_hparams` is not of type `HParams`")
 
-    if not isinstance(batch_norm_hparams, tf.contrib.training.HParams):
+    if not isinstance(batch_norm_hparams, hparam.HParams):
         raise ValueError("The paramater `batch_norm_hparams` is not of type `HParams`")
 
     in_shape = inputs.get_shape()

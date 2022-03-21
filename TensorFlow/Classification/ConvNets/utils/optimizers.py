@@ -19,12 +19,12 @@
 
 from __future__ import print_function
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 __all__ = ['FixedLossScalerOptimizer']
 
 
-class FixedLossScalerOptimizer(tf.compat.v1.train.Optimizer):
+class FixedLossScalerOptimizer(tf.train.Optimizer):
     """An optimizer that scales loss and un-scales gradients for FP16 training."""
 
     def __init__(self, optimizer, scale=None, name="LossScalingOptimizer", use_locking=False):

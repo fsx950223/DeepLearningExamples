@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 __all__ = ['dense']
 
@@ -22,7 +22,7 @@ def dense(
     units,
     use_bias=True,
     trainable=True,
-    kernel_initializer=tf.compat.v1.variance_scaling_initializer(),
+    kernel_initializer=tf.variance_scaling_initializer(),
     bias_initializer=tf.zeros_initializer()
 ):
 

@@ -79,4 +79,6 @@ python ./dataprep/build_imagenet_data.py \
   --output_directory="${DATA_DIR}/result" \
   --imagenet_metadata_file="${IMAGENET_METADATA_FILE}" \
   --labels_file="${LABELS_FILE}" \
-  --bounding_box_file="${BOUNDING_BOX_FILE}"
+  --bounding_box_file="${BOUNDING_BOX_FILE}" \
+  --train_shards=8 \
+  --validation_shards=8

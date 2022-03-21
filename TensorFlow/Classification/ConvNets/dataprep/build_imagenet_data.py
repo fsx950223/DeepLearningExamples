@@ -95,7 +95,8 @@ import threading
 
 import numpy as np
 import six
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 tf.app.flags.DEFINE_string('train_directory', '/tmp/',
                            'Training data directory')
@@ -512,7 +513,7 @@ def _find_image_files(data_dir, labels_file):
 
   # Construct the list of JPEG files and labels.
   for synset in challenge_synsets:
-    jpeg_file_path = '%s/%s/*.JPEG' % (data_dir, synset)
+    jpeg_file_path = '%s/%s/images/*.JPEG' % (data_dir, synset)
     matching_files = tf.gfile.Glob(jpeg_file_path)
 
     labels.extend([label_index] * len(matching_files))

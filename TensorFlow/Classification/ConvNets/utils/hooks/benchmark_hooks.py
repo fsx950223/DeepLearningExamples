@@ -16,7 +16,7 @@
 # limitations under the License.
 
 import time
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 import dllogger
 

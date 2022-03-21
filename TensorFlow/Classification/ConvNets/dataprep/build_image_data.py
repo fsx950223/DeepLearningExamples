@@ -74,7 +74,7 @@ import sys
 import threading
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 tf.app.flags.DEFINE_string('train_directory', '/tmp/',
                            'Training data directory')

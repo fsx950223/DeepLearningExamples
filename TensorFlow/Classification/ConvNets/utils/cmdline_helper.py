@@ -177,6 +177,15 @@ def parse_cmdline(available_arch):
                    type=str,
                    help="Path to file or directory of files to run prediction on.")
 
+    p.add_argument('--distribute_strategy',
+                   choices=[
+                       'horovod', 'mirrored', 'workers'
+                   ],
+                   required=False,
+                   default='horovod',
+                   type=str,
+                   help="Distribute strategy")
+
     p.add_argument('--batch_size', type=int, required=True, help="""Size of each minibatch per GPU.""")
 
     p.add_argument('--num_iter', type=int, required=False, default=1, help="""Number of iterations to run.""")

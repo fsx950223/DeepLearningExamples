@@ -17,7 +17,7 @@
 
 import sys
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from utils import image_processing
 from utils import hvd_wrapper as hvd

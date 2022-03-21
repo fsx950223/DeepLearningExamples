@@ -20,10 +20,11 @@ from __future__ import division
 from __future__ import print_function
 import os
 
-import tensorflow as tf
-
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from utils import hvd_wrapper as hvd
 from model import resnet
+import tf_quantize
 
 tf.app.flags.DEFINE_string(
     'model_name', 'resnet50', 'The name of the architecture to save. The default name was being ' 
@@ -103,7 +104,7 @@ def main(_):
                 use_final_conv=FLAGS.use_final_conv)
     
     if FLAGS.quantize:
-        tf.contrib.quantize.experimental_create_eval_graph(symmetric=FLAGS.symmetric, 
+        tf_quantize.experimental_create_eval_graph(symmetric=FLAGS.symmetric, 
                                                            use_qdq=FLAGS.use_qdq)
 
     # Define the saver and restore the checkpoint

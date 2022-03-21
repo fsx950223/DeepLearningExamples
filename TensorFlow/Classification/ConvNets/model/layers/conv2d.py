@@ -15,7 +15,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 __all__ = ['conv2d']
 
@@ -29,7 +29,7 @@ def conv2d(
     data_format='NHWC',
     dilation_rate=(1, 1),
     use_bias=True,
-    kernel_initializer=tf.compat.v1.variance_scaling_initializer(),
+    kernel_initializer=tf.variance_scaling_initializer(),
     bias_initializer=tf.zeros_initializer(),
     trainable=True,
     name=None

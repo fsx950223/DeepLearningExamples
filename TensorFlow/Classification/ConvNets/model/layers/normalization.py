@@ -17,7 +17,8 @@
 
 import inspect
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 from tensorflow.python.training import moving_averages
 
 __all__ = ['batch_norm']
@@ -65,7 +66,7 @@ def batch_norm(
 
         inputs = tf.reshape(inputs, new_shape)
 
-    net = tf.contrib.layers.batch_norm(
+    net = slim.layers.batch_norm(
         inputs,
         decay=decay,
         scale=scale,

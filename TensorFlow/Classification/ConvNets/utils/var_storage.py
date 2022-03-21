@@ -17,7 +17,7 @@
 # limitations under the License.
 # ==============================================================================
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 __all__ = ['model_variable_scope']
 

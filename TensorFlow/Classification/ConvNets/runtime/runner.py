@@ -18,13 +18,14 @@ import os
 import multiprocessing
 import warnings
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 
 from model import resnet
 
 from utils import hooks
 from utils import data_utils
+from utils import hparam
 from utils import hvd_wrapper as hvd
 
 from runtime import runner_utils
@@ -89,7 +90,7 @@ class Runner(object):
 
         os.environ['HOROVOD_GPU_ALLREDUCE'] = 'NCCL'
 
-        #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '2'
@@ -120,26 +121,26 @@ class Runner(object):
 
         # =================================================
 
-        model_hparams = tf.contrib.training.HParams(width=height,
-                                                    height=width,
-                                                    n_channels=n_channels,
-                                                    n_classes=n_classes,
-                                                    dtype=dtype,
-                                                    input_format=input_format,
-                                                    compute_format=compute_format,
-                                                    distort_colors=distort_colors,
-                                                    seed=tf_seed)
+        model_hparams = hparam.HParams(width=height,
+                                       height=width,
+                                       n_channels=n_channels,
+                                       n_classes=n_classes,
+                                       dtype=dtype,
+                                       input_format=input_format,
+                                       compute_format=compute_format,
+                                       distort_colors=distort_colors,
+                                       seed=tf_seed)
 
         num_preprocessing_threads = 10 if not use_dali else 4
-        run_config_performance = tf.contrib.training.HParams(num_preprocessing_threads=num_preprocessing_threads,
-                                                             use_tf_amp=use_tf_amp,
-                                                             use_xla=use_xla,
-                                                             use_dali=use_dali,
-                                                             use_cpu=use_cpu,
-                                                             gpu_memory_fraction=gpu_memory_fraction,
-                                                             gpu_id=gpu_id)
+        run_config_performance = hparam.HParams(num_preprocessing_threads=num_preprocessing_threads,
+                                                use_tf_amp=use_tf_amp,
+                                                use_xla=use_xla,
+                                                use_dali=use_dali,
+                                                use_cpu=use_cpu,
+                                                gpu_memory_fraction=gpu_memory_fraction,
+                                                gpu_id=gpu_id)
 
-        run_config_additional = tf.contrib.training.HParams(
+        run_config_additional = hparam.HParams(
             model_dir=model_dir,
             log_dir=log_dir if hvd.rank() == 0 else None,
             data_dir=data_dir,
@@ -151,7 +152,7 @@ class Runner(object):
         model_name = architecture
         architecture = resnet.model_architectures[architecture]
 
-        self._model = resnet.ResnetModel(model_name=model_name,
+        self. _model = resnet.ResnetModel(model_name=model_name,
                                          n_classes=model_hparams.n_classes,
                                          layers_count=architecture["layers"],
                                          layers_depth=architecture["widths"],
@@ -171,14 +172,15 @@ class Runner(object):
 
         self.training_logging_hook = None
         self.eval_logging_hook = None
+        # self.eval_profile_hook = None
 
     @staticmethod
     def _build_hparams(*args):
 
-        hparams = tf.contrib.training.HParams()
+        hparams = hparam.HParams()
 
         for _hparams in args:
-            if not isinstance(_hparams, tf.contrib.training.HParams):
+            if not isinstance(_hparams, hparam.HParams):
                 raise ValueError("Non valid HParams argument object detected:", _hparams)
 
             for key, val in _hparams.values().items():
@@ -211,16 +213,17 @@ class Runner(object):
                 config = tf.ConfigProto(gpu_options=gpu_options)
                 config.gpu_options.allow_growth = False
             else:
-                config.gpu_options.allow_growth = True
+                # config.gpu_options.allow_growth = True
+                config.gpu_options.allow_growth = False
 
             config.allow_soft_placement = True
             config.log_device_placement = False
 
-            config.gpu_options.visible_device_list = str(gpu_id)
-            config.gpu_options.force_gpu_compatible = True  # Force pinned memory
+            # config.gpu_options.visible_device_list = str(gpu_id)
+            # config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
-            if hvd.size() > 1:
-                config.gpu_options.visible_device_list = str(hvd.local_rank())
+            # if hvd.size() > 1:
+            #     config.gpu_options.visible_device_list = str(hvd.local_rank())
 
             config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
@@ -235,7 +238,7 @@ class Runner(object):
         return config
 
     @staticmethod
-    def _get_run_config(mode, model_dir, use_xla, use_dali, use_cpu, gpu_memory_fraction, gpu_id=0, seed=None):
+    def _get_run_config(mode, model_dir, use_xla, use_dali, use_cpu, gpu_memory_fraction, gpu_id=0, seed=None, distribute_strategy='horovod'):
 
         if mode not in ["train", 'validation', 'benchmark', 'inference']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" %
@@ -245,35 +248,54 @@ class Runner(object):
             tf_random_seed = 2 * (seed + hvd.rank())
         else:
             tf_random_seed = None
+        if distribute_strategy == 'mirrored':
+            ds_strategy = tf.distribute.MirroredStrategy(cross_device_ops=tf.distribute.NcclAllReduce())
+        elif distribute_strategy == 'workers':
+            ds_strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+        else:
+            ds_strategy = None
+        session_config = Runner._get_session_config(mode=mode,
+                                                    use_xla=use_xla,
+                                                    use_dali=use_dali,
+                                                    use_cpu=use_cpu,
+                                                    gpu_memory_fraction=gpu_memory_fraction,
+                                                    gpu_id=gpu_id)
+        if distribute_strategy == 'mirrored':
+            gpus = os.environ.get('AMD_VISIBLE_DEVICES', session_config.gpu_options.visible_device_list)
+            session_config.gpu_options.visible_device_list = gpus
+        elif distribute_strategy == 'workers':
+            gpus = os.environ.get('AMD_VISIBLE_DEVICES', session_config.gpu_options.visible_device_list)
+            if not gpus:
+                gpus = str(gpu_id)
+            session_config.gpu_options.visible_device_list = gpus
+        else:
+            session_config.gpu_options.visible_device_list = str(gpu_id)
 
+            if hvd.size() > 1:
+                session_config.gpu_options.visible_device_list = str(hvd.local_rank())
+        
         config = tf.estimator.RunConfig(
             model_dir=model_dir,
             tf_random_seed=tf_random_seed,
             save_summary_steps=100 if mode in ['train', 'validation'] else 1e9,  # disabled in benchmark mode
             save_checkpoints_steps=None,
             save_checkpoints_secs=None,
-            session_config=Runner._get_session_config(mode=mode,
-                                                      use_xla=use_xla,
-                                                      use_dali=use_dali,
-                                                      use_cpu=use_cpu,
-                                                      gpu_memory_fraction=gpu_memory_fraction,
-                                                      gpu_id=gpu_id),
+            session_config=session_config,
             keep_checkpoint_max=5,
             keep_checkpoint_every_n_hours=1e6,  # disabled
             log_step_count_steps=1e9,
-            train_distribute=None,
+            train_distribute=ds_strategy,
             device_fn=None,
             protocol=None,
-            eval_distribute=None,
+            eval_distribute=ds_strategy,
             experimental_distribute=None)
-
         if mode == 'train':
             config = config.replace(save_checkpoints_steps=1000 if hvd.rank() == 0 else None,
                                     keep_checkpoint_every_n_hours=3)
 
         return config
 
-    def _get_estimator(self, mode, run_params, use_xla, use_dali, gpu_memory_fraction, gpu_id=0):
+    def _get_estimator(self, mode, run_params, use_xla, use_dali, gpu_memory_fraction, gpu_id=0, distribute_strategy='horovod'):
 
         if mode not in ["train", 'validation', 'benchmark', 'inference']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" %
@@ -286,6 +308,7 @@ class Runner(object):
                                             use_cpu=self.run_hparams.use_cpu,
                                             gpu_memory_fraction=gpu_memory_fraction,
                                             gpu_id=gpu_id,
+                                            distribute_strategy=distribute_strategy,
                                             seed=self.run_hparams.seed)
 
         return tf.estimator.Estimator(model_fn=self._model,
@@ -315,7 +338,8 @@ class Runner(object):
               quant_delay=0,
               finetune_checkpoint=None,
               use_final_conv=False,
-              use_qdq=False):
+              use_qdq=False,
+              distribute_strategy='horovod'):
 
         if iter_unit not in ["epoch", "batch"]:
             raise ValueError('`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
@@ -331,13 +355,13 @@ class Runner(object):
         else:
             use_static_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
 
-        num_gpus = hvd.size()
+        num_gpus = hvd.size() if distribute_strategy == 'horovod' else len(tf.config.experimental.get_visible_devices('GPU'))
         global_batch_size = batch_size * num_gpus
-
+        mode = 'benchmark' if is_benchmark else 'train'
         if self.run_hparams.data_dir is not None:
             filenames, num_samples, num_steps, num_epochs, num_decay_steps = runner_utils.parse_tfrecords_dataset(
                 data_dir=self.run_hparams.data_dir,
-                mode="train",
+                mode=mode,
                 iter_unit=iter_unit,
                 num_iter=num_iter,
                 global_batch_size=global_batch_size,
@@ -394,7 +418,6 @@ class Runner(object):
             bcast_hook = hvd.hvd_global_object.BroadcastGlobalVariablesHook(0)
             training_hooks.append(bcast_hook)
 
-        training_hooks.append(hooks.PrefillStagingAreasHook())
         training_hooks.append(hooks.TrainingPartitionHook())
 
         estimator_params = {
@@ -420,12 +443,13 @@ class Runner(object):
 
         if finetune_checkpoint:
             estimator_params['finetune_checkpoint'] = finetune_checkpoint
-
-        image_classifier = self._get_estimator(mode='train',
+        
+        image_classifier = self._get_estimator(mode=mode,
                                                run_params=estimator_params,
                                                use_xla=self.run_hparams.use_xla,
                                                use_dali=self.run_hparams.use_dali,
                                                gpu_memory_fraction=self.run_hparams.gpu_memory_fraction,
+                                               distribute_strategy=distribute_strategy,
                                                gpu_id=self.run_hparams.gpu_id)
 
         def training_data_fn():
@@ -472,7 +496,6 @@ class Runner(object):
             current_step = image_classifier.get_variable_value("global_step")
         except ValueError:
             current_step = 0
-
         run_iter = max(0, min(run_iter, num_steps - current_step))
         print("Current step:", current_step)
 
@@ -507,6 +530,7 @@ class Runner(object):
         symmetric=False,
         use_qdq=False,
         use_final_conv=False,
+        distribute_strategy='horovod'
     ):
 
         if iter_unit not in ["epoch", "batch"]:
@@ -528,15 +552,17 @@ class Runner(object):
                                                use_xla=self.run_hparams.use_xla,
                                                use_dali=self.run_hparams.use_dali,
                                                gpu_memory_fraction=self.run_hparams.gpu_memory_fraction,
-                                               gpu_id=self.run_hparams.gpu_id)
-
+                                               gpu_id=self.run_hparams.gpu_id,
+                                               distribute_strategy=distribute_strategy)
+        num_gpus = hvd.size() if distribute_strategy == 'horovod' else len(tf.config.experimental.get_visible_devices('GPU'))
+        global_batch_size = batch_size * num_gpus
         if self.run_hparams.data_dir is not None:
             filenames, num_samples, num_steps, num_epochs, num_decay_steps = runner_utils.parse_tfrecords_dataset(
                 data_dir=self.run_hparams.data_dir,
                 mode="validation",
                 iter_unit=iter_unit,
                 num_iter=num_iter,
-                global_batch_size=batch_size,
+                global_batch_size=global_batch_size,
             )
 
         else:
@@ -549,18 +575,19 @@ class Runner(object):
                                                                 mode="validation")
 
         eval_hooks = []
-
         if hvd.rank() == 0:
             self.eval_logging_hook = hooks.BenchmarkLoggingHook(
-                global_batch_size=batch_size, warmup_steps=warmup_steps, logging_steps=log_every_n_steps
+                global_batch_size=global_batch_size, warmup_steps=warmup_steps, logging_steps=log_every_n_steps
             )
             eval_hooks.append(self.eval_logging_hook)
-
+            # self.eval_profile_hook = tf.estimator.ProfilerHook(
+            #     save_secs=10, output_dir='./profile', show_memory=True)
+            # eval_hooks.append(self.eval_profile_hook)
             print('Starting Model Evaluation...')
             print("Evaluation Epochs", num_epochs)
             print("Evaluation Steps", num_steps)
             print("Decay Steps", num_decay_steps)
-            print("Global Batch Size", batch_size)
+            print("Global Batch Size", global_batch_size)
 
         def evaluation_data_fn():
 
